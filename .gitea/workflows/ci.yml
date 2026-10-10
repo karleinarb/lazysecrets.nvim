@@ -1,0 +1,78 @@
+name: CI
+
+# Pull requests into main: formatting (StyLua, .stylua.toml), and the smoke
+# test (tests/smoke.lua) on the oldest Neovim the README supports and the
+# current stable. Versions are pinned, with checksums, so a new release
+# can't fail CI on its own.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  format:
+    name: StyLua
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install StyLua
+        run: |
+          set -eo pipefail
+          V=2.5.2
+          case "$(uname -m)" in
+            x86_64) A=x86_64; SUM=bcb0d855e91f102f28a370e850f8566b3b44b79e6274d806ea5246837c0fd5ab ;;
+            aarch64) A=aarch64; SUM=0ef2ebf0b7e5a652b65c4cb96c6d9ffb3981a98547de3c764465bbf54a8d761a ;;
+            *) echo "::error::no StyLua for $(uname -m)"; exit 1 ;;
+          esac
+          F="stylua-linux-$A.zip"
+          curl -fsSL -o "$RUNNER_TEMP/$F" "https://github.com/JohnnyMorganz/StyLua/releases/download/v$V/$F"
+          echo "$SUM  $RUNNER_TEMP/$F" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/$F" -d "$RUNNER_TEMP/stylua"
+          install "$RUNNER_TEMP/stylua/stylua" /usr/local/bin/
+
+      - name: Check
+        run: |
+          if ! stylua --check .; then
+            echo "::error::not StyLua-formatted (run stylua .)"
+            exit 1
+          fi
+
+  test:
+    name: Smoke test (Neovim ${{ matrix.nvim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nvim: 0.11.7
+            x86_64: 38a7c6317f94503841096c00e8fde05ef04b9472fc9d7d62b6e033cecd6f7991
+            arm64: 99bb3c53604e83ce18fc0b459e34cf1a5e212f4e5fbe2eb136b3c18092ae9905
+          - nvim: 0.12.5
+            x86_64: bce0f56eda1f1b1db6eee8f4133d7a38813ea07933837dd1777411ca384c6875
+            arm64: 1aa5ca085249580ae0f91eb14f27ec0919773ff2d99a163d03f3d6c21ac29725
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        env:
+          V: ${{ matrix.nvim }}
+          SUM_X86_64: ${{ matrix.x86_64 }}
+          SUM_ARM64: ${{ matrix.arm64 }}
+        run: |
+          set -eo pipefail
+          case "$(uname -m)" in
+            x86_64) A=x86_64; SUM=$SUM_X86_64 ;;
+            aarch64) A=arm64; SUM=$SUM_ARM64 ;;
+            *) echo "::error::no Neovim for $(uname -m)"; exit 1 ;;
+          esac
+          F="nvim-linux-$A.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$F" "https://github.com/neovim/neovim/releases/download/v$V/$F"
+          echo "$SUM  $RUNNER_TEMP/$F" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$F" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/nvim-linux-$A/bin" >> "$GITHUB_PATH"
+
+      - name: Smoke test
+        run: nvim --clean -l tests/smoke.lua
