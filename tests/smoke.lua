@@ -42,5 +42,27 @@ vim.cmd.wincmd("p")
 m.open({ cwd = other .. "/sub" })
 assert(job() ~= first, "opening in another repo reused the first one")
 
+-- state and reveal, as lazysecrets asks them from outside for a link.
+local pid = vim.fn.jobpid(job())
+assert(m.state(pid) == "shown", "state of the open window: " .. m.state(pid))
+assert(m.state(pid + 1) == "none", "state of another process")
+vim.cmd.wincmd("p")
+vim.wait(100, function()
+  return m.state(pid) == "hidden"
+end)
+assert(m.state(pid) == "hidden", "leaving the window didn't hide it: " .. m.state(pid))
+
+local get_mode = vim.api.nvim_get_mode
+vim.api.nvim_get_mode = function()
+  return { mode = "c", blocking = false } -- typing a command
+end
+assert(m.state(pid) == "busy" and not m.reveal(pid), "a link would interrupt a command")
+assert(vim.api.nvim_win_get_config(0).relative == "", "reveal() showed the window while busy")
+vim.api.nvim_get_mode = get_mode
+
+assert(m.reveal(pid), "reveal() of the hidden window")
+assert(vim.api.nvim_win_get_config(0).relative == "editor", "reveal() didn't bring the window back")
+assert(vim.fn.jobpid(job()) == pid, "reveal() brought back another lazysecrets")
+
 vim.fn.delete(tmp, "rf")
 print("ok")

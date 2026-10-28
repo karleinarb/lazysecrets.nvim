@@ -167,6 +167,39 @@ local function last_line(buf)
   end
 end
 
+-- For lazysecrets itself, from outside (nvim --server), when a link is
+-- handed to it: whether its window, with the pid, is "shown", "hidden"
+-- and can be brought back, or "busy": nvim is in the middle of something
+-- (typing, a command, a picker, a pending operator), which a window
+-- popping up would break; the link then opens elsewhere.
+---@param pid integer
+---@return "shown"|"hidden"|"busy"|"none"
+function M.state(pid)
+  if not running() or vim.fn.jobpid(term.job) ~= pid then
+    return "none"
+  end
+  if term.win and vim.api.nvim_win_is_valid(term.win) then
+    return "shown"
+  end
+  local mode = vim.api.nvim_get_mode()
+  if mode.blocking or not vim.tbl_contains({ "n", "nt", "t" }, mode.mode) then
+    return "busy"
+  end
+  return "hidden"
+end
+
+-- Shows the window of the lazysecrets with the pid, if it's hidden and
+-- nvim isn't busy (see state). Returns whether it's in view.
+---@param pid integer
+---@return boolean
+function M.reveal(pid)
+  local state = M.state(pid)
+  if state == "hidden" then
+    show()
+  end
+  return state == "shown" or state == "hidden"
+end
+
 ---@param opts? { args?: string[], win?: table, cwd?: string }
 function M.open(opts)
   opts = opts or {}

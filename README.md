@@ -5,6 +5,9 @@ Brings [lazysecrets](https://github.com/karleinarb/lazysecrets) to Neovim.
 ## Features
 - Prioritizes showing the secrets in the repo you are in
 - The lazysecrets session stays alive for the whole nvim session
+- A `lazysecrets://` link opened from the browser or chat brings the hidden
+  session back, unless you're in the middle of something (typing, a
+  command, a picker): then it opens elsewhere (lazysecrets 0.5 or later)
 - `e` on a file in lazysecrets will open it in your current nvim session
 - Follows the `:colorscheme` you have set in nvim
 
